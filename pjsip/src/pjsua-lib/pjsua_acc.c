@@ -2751,10 +2751,11 @@ PJ_DEF(pj_status_t) pjsua_acc_set_registration( pjsua_acc_id acc_id,
          * employed). A more reliable way is to query the regc directly
          * when needed.
          */
-	//pjsip_regc_info reg_info;
+	pjsip_regc_info reg_info;
 
-	//pjsip_regc_get_info(pjsua_var.acc[acc_id].regc, &reg_info);
+	pjsip_regc_get_info(pjsua_var.acc[acc_id].regc, &reg_info);
 	//pjsua_var.acc[acc_id].auto_rereg.reg_tp = reg_info.transport;
+	pjsua_var.acc[acc_id].tp_type = pjsip_transport_get_type_from_flag(reg_info.transport->flag);
 
         if (pjsua_var.ua_cfg.cb.on_reg_started) {
             (*pjsua_var.ua_cfg.cb.on_reg_started)(acc_id, renew);
