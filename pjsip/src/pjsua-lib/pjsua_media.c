@@ -2474,7 +2474,7 @@ pj_status_t pjsua_media_channel_create_sdp(pjsua_call_id call_id,
     pjsua_call *call = &pjsua_var.calls[call_id];
     pjsua_acc *acc = &pjsua_var.acc[call->acc_id];
     pjmedia_sdp_neg_state sdp_neg_state = PJMEDIA_SDP_NEG_STATE_NULL;
-    unsigned mi;
+    unsigned mi, i;
     unsigned tot_bandw_tias = 0;
     pj_status_t status;
 
@@ -2553,6 +2553,8 @@ pj_status_t pjsua_media_channel_create_sdp(pjsua_call_id call_id,
 	pjsua_call_media *call_med = &call->media_prov[mi];
 	pjmedia_sdp_media *m = NULL;
 	pjmedia_transport_info tpinfo;
+	pjmedia_sdp_attr *attr;
+	pjmedia_sdp_precondition_attr precond, rem_precond;
 	unsigned i;
 
 	if (rem_sdp && mi >= rem_sdp->media_count) {
@@ -2666,6 +2668,60 @@ pj_status_t pjsua_media_channel_create_sdp(pjsua_call_id call_id,
 
 	if (status != PJ_SUCCESS)
 	    goto on_error;
+
+	/* Preconditions */
+	if (rem_sdp) {
+		/* For answer, match remote offer */
+		PJ_LOG(4, (THIS_FILE, "PRECONDITIONS answer pjsua_media_channel_create_sdp"));
+		/* Check if preconditions attributes are present in the SDP. */
+		pjmedia_sdp_precondition_resolved(rem_sdp->media[mi]);
+    	for (i = 0; i < rem_sdp->media[mi]->attr_count; i++) {
+		if (pj_strcmp2(&rem_sdp->media[mi]->attr[i]->name, "des") == 0) {
+	    	PJ_LOG(4, (THIS_FILE, "FOUND des precondition"));
+			status = pjmedia_sdp_attr_get_precondition(
+	    			(const pjmedia_sdp_attr *)rem_sdp->media[mi]->attr[i], &rem_precond);
+	    	if (status == PJ_SUCCESS) {
+	        	precond.pc_status = PJMEDIA_SDP_PC_STATUS_DESIRED;
+				precond.pc_type = PJMEDIA_SDP_PC_TYPE_QOS;
+				precond.pc_strength_tag = rem_precond.pc_strength_tag;
+				precond.pc_direction_tag = rem_precond.pc_direction_tag;
+				if (rem_precond.pc_status_type == PJMEDIA_SDP_PC_S_TYPE_LOCAL)
+					precond.pc_status_type = PJMEDIA_SDP_PC_S_TYPE_REMOTE;
+				if (rem_precond.pc_status_type == PJMEDIA_SDP_PC_S_TYPE_REMOTE)
+					precond.pc_status_type = PJMEDIA_SDP_PC_S_TYPE_LOCAL;
+				attr = pjmedia_sdp_attr_create_precondition(pool, &precond);
+				if (attr)
+					pjmedia_sdp_attr_add(&m->attr_count, m->attr, attr);
+				
+	    	}
+		} else if (pj_strcmp2(&rem_sdp->media[mi]->attr[i]->name, "curr") == 0) {
+			PJ_LOG(4, (THIS_FILE, "FOUND curr precondition"));
+			status = pjmedia_sdp_attr_get_precondition(
+	    			(const pjmedia_sdp_attr *)rem_sdp->media[mi]->attr[i], &rem_precond);
+			if (status == PJ_SUCCESS) {
+	        	precond.pc_status = PJMEDIA_SDP_PC_STATUS_CURRENT;
+				precond.pc_type = PJMEDIA_SDP_PC_TYPE_QOS;
+				if (rem_precond.pc_status_type == PJMEDIA_SDP_PC_S_TYPE_LOCAL)
+				{
+					precond.pc_status_type = PJMEDIA_SDP_PC_S_TYPE_REMOTE;
+					precond.pc_direction_tag = rem_precond.pc_direction_tag;
+				}
+				if (rem_precond.pc_status_type == PJMEDIA_SDP_PC_S_TYPE_REMOTE)
+				{
+					precond.pc_status_type = PJMEDIA_SDP_PC_S_TYPE_LOCAL;
+					precond.pc_direction_tag = PJMEDIA_SDP_PC_DIRECTION_SENDRECV;
+				}
+				attr = pjmedia_sdp_attr_create_precondition(pool, &precond);
+				if (attr)
+					pjmedia_sdp_attr_add(&m->attr_count, m->attr, attr);
+	    	}
+		}
+    	}
+	/* Preconditions */
+	} else if (acc->cfg.rtcp_fb_cfg.cap_count) {
+		/* For offer, check account setting */
+		PJ_LOG(4, (THIS_FILE, "PRECONDITIONS offer pjsua_media_channel_create_sdp"));
+	}
 
 	/* Add generated media to SDP session */
 	sdp->media[sdp->media_count++] = m;
@@ -3720,7 +3776,23 @@ on_check_med_status:
     pj_memcpy(call->media_prov, call->media,
 	      sizeof(call->media[0]) * call->med_cnt);
 
-    /* Perform SDP re-negotiation. */
+    PJ_LOG(4, (THIS_FILE, "PRECONDITIONS pjsua_media_channel_update"));
+
+	char sdpbuf1[1024];
+    pj_ssize_t len1;
+	len1 = pjmedia_sdp_print(remote_sdp, sdpbuf1, sizeof(sdpbuf1));
+    if (len1 < 1) {
+		PJ_LOG(3,(THIS_FILE,"   error: printing sdp1"));
+    }
+	PJ_LOG(3,(THIS_FILE,"Remote SDP: %s\n", sdpbuf1));
+
+	len1 = pjmedia_sdp_print(local_sdp, sdpbuf1, sizeof(sdpbuf1));
+    if (len1 < 1) {
+		PJ_LOG(3,(THIS_FILE,"   error: printing sdp1"));
+    }
+	PJ_LOG(3,(THIS_FILE,"Local SDP: %s\n", sdpbuf1));
+
+	/* Perform SDP re-negotiation. */
     if (got_media && need_renego_sdp) {
 	pjmedia_sdp_neg *neg = call->inv->neg;
 

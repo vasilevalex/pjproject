@@ -568,6 +568,22 @@ PJ_DEF(pj_status_t) pjmedia_stream_info_from_sdp(
 	}
     }
 
+	/* Check if "preconditions" attributes are present in the SDP. */
+    for (i = 0; i < rem_m->attr_count; i++) {
+	if (pj_strcmp2(&rem_m->attr[i]->name, "des") == 0 ||
+		pj_strcmp2(&rem_m->attr[i]->name, "curr") == 0 ||
+		pj_strcmp2(&rem_m->attr[i]->name, "conf") == 0) {
+	    pjmedia_sdp_precondition_attr precondition;
+
+	    status = pjmedia_sdp_attr_get_precondition(
+				(const pjmedia_sdp_attr *)rem_m->attr[i], &precondition);
+	    if (status == PJ_SUCCESS) {
+	        /* print it 
+			PJ_LOG(4,(THIS_FILE, "precondition: %s: %s \n", &precondition->pc_status, &rem_m->attr[i]->value));*/
+	    }
+	}
+    }
+
     /* Get the payload number for receive channel. */
     /*
        Previously we used to rely on fmt[0] being the selected codec,
