@@ -571,6 +571,239 @@ PJ_DEF(pjmedia_sdp_attr*) pjmedia_sdp_attr_create_ssrc( pj_pool_t *pool,
     return attr;
 }
 
+PJ_DEF(pj_status_t) pjmedia_sdp_attr_get_precondition(
+    const pjmedia_sdp_attr *attr, pjmedia_sdp_precondition_attr *precondition)
+{
+    pj_scanner scanner;
+    pj_str_t token;
+    pj_status_t status = -1;
+    PJ_USE_EXCEPTION;
+
+    if (attr->value.slen == 0)
+        return PJMEDIA_SDP_EINATTR;
+
+    /* Init */
+    pj_bzero(precondition, sizeof(*precondition));
+
+    if (pj_strcmp2(&attr->name, "des")==0)
+        precondition->pc_status = PJMEDIA_SDP_PC_STATUS_DESIRED;
+    if (pj_strcmp2(&attr->name, "curr")==0)
+        precondition->pc_status = PJMEDIA_SDP_PC_STATUS_CURRENT;
+    if (pj_strcmp2(&attr->name, "conf")==0)
+        precondition->pc_status = PJMEDIA_SDP_PC_STATUS_CONFIRMED;
+
+    PJ_ASSERT_RETURN(precondition->pc_status != PJMEDIA_SDP_PC_STATUS_ERR, PJ_EINVALIDOP);
+
+    init_sdp_parser();
+
+    /* The buffer passed to the scanner is not guaranteed to be NULL
+     * terminated, but should be safe. See ticket #2063.
+     */
+    pj_scan_init(&scanner, (char*)attr->value.ptr, attr->value.slen,
+                 PJ_SCAN_AUTOSKIP_WS, &on_scanner_error);
+
+    /* Parse */
+    PJ_TRY {
+
+        /* Get the precondition type. Only "qos" supported */
+        pj_scan_get(&scanner, &cs_token, &token);
+    if (pj_strcmp2(&token, "qos") == 0)
+        precondition->pc_type = PJMEDIA_SDP_PC_TYPE_QOS;
+    else
+        return PJ_EINVALIDOP;
+
+    /* Get the precondition strength tag. Only for desired status */
+    if (precondition->pc_status == PJMEDIA_SDP_PC_STATUS_DESIRED)
+    {
+        pj_scan_get(&scanner, &cs_token, &token);
+        if (pj_strcmp2(&token, "mandatory") == 0)
+            precondition->pc_strength_tag = PJMEDIA_SDP_PC_STRENGTH_MANDATORY;
+        if (pj_strcmp2(&token, "optional") == 0)
+            precondition->pc_strength_tag = PJMEDIA_SDP_PC_STRENGTH_OPTIONAL;
+        if (pj_strcmp2(&token, "none") == 0)
+            precondition->pc_strength_tag = PJMEDIA_SDP_PC_STRENGTH_NONE;
+        if (pj_strcmp2(&token, "failure") == 0)
+            precondition->pc_strength_tag = PJMEDIA_SDP_PC_STRENGTH_FAILURE;
+        if (pj_strcmp2(&token, "unknown") == 0)
+            precondition->pc_strength_tag = PJMEDIA_SDP_PC_STRENGTH_UNKNOWN;
+    }
+
+    /* Get the precondition status type. */
+    pj_scan_get(&scanner, &cs_token, &token);
+    if (pj_strcmp2(&token, "e2e") == 0)
+        precondition->pc_status_type = PJMEDIA_SDP_PC_S_TYPE_E2E;
+    if (pj_strcmp2(&token, "local") == 0)
+        precondition->pc_status_type = PJMEDIA_SDP_PC_S_TYPE_LOCAL;
+    if (pj_strcmp2(&token, "remote") == 0)
+        precondition->pc_status_type = PJMEDIA_SDP_PC_S_TYPE_REMOTE;
+    /* Get the precondition direction tag. */
+    pj_scan_get(&scanner, &cs_token, &token);
+    if (pj_strcmp2(&token, "none") == 0)
+        precondition->pc_direction_tag = PJMEDIA_SDP_PC_DIRECTION_NONE;
+    if (pj_strcmp2(&token, "send") == 0)
+        precondition->pc_direction_tag = PJMEDIA_SDP_PC_DIRECTION_SEND;
+    if (pj_strcmp2(&token, "recv") == 0)
+        precondition->pc_direction_tag = PJMEDIA_SDP_PC_DIRECTION_RECV;
+    if (pj_strcmp2(&token, "sendrecv") == 0)
+        precondition->pc_direction_tag = PJMEDIA_SDP_PC_DIRECTION_SENDRECV;
+
+        status = PJ_SUCCESS;
+
+    }
+    PJ_CATCH_ANY {
+        status = PJMEDIA_SDP_EINSSRC;
+    }
+    PJ_END;
+
+    pj_scan_fini(&scanner);
+    return status;
+}
+
+PJ_DECL(pjmedia_sdp_attr*) pjmedia_sdp_attr_create_precondition(pj_pool_t *pool,
+                                                        const pjmedia_sdp_precondition_attr *precondition)
+{
+    pjmedia_sdp_attr *attr;
+    char value_buf[128]; /* should be enough */
+    pj_str_t value_tmp;
+
+    attr = PJ_POOL_ALLOC_T(pool, pjmedia_sdp_attr);
+
+    switch (precondition->pc_status) {
+    case PJMEDIA_SDP_PC_STATUS_CURRENT:
+        attr->name = pj_str("curr");
+        break;
+    case PJMEDIA_SDP_PC_STATUS_DESIRED:
+        attr->name = pj_str("des");
+        break;
+    case PJMEDIA_SDP_PC_STATUS_CONFIRMED:
+        attr->name = pj_str("conf");
+        break;
+    default:
+        break;
+    }
+    PJ_LOG(4, (THIS_FILE, "attr name: %.*s", (int)attr->name.slen, attr->name.ptr));
+
+    pj_strset(&value_tmp, value_buf, 0);
+    switch (precondition->pc_type) {
+    case PJMEDIA_SDP_PC_TYPE_QOS:
+        pj_strcat2(&value_tmp, "qos ");
+        break;
+    default:
+        break;
+    }
+
+    if (precondition->pc_status == PJMEDIA_SDP_PC_STATUS_DESIRED)
+        switch (precondition->pc_strength_tag) {
+        case PJMEDIA_SDP_PC_STRENGTH_MANDATORY:
+            pj_strcat2(&value_tmp, "mandatory ");
+            break;
+        case PJMEDIA_SDP_PC_STRENGTH_OPTIONAL:
+            pj_strcat2(&value_tmp, "optional ");
+            break;
+        case PJMEDIA_SDP_PC_STRENGTH_NONE:
+            pj_strcat2(&value_tmp, "none ");
+            break;
+        default:
+            break;
+        }
+
+    switch (precondition->pc_status_type) {
+    case PJMEDIA_SDP_PC_S_TYPE_E2E:
+        pj_strcat2(&value_tmp, "e2e ");
+        break;
+    case PJMEDIA_SDP_PC_S_TYPE_LOCAL:
+        pj_strcat2(&value_tmp, "local ");
+        break;
+    case PJMEDIA_SDP_PC_S_TYPE_REMOTE:
+        pj_strcat2(&value_tmp, "remote ");
+        break;
+    default:
+        break;
+    }
+
+    switch (precondition->pc_direction_tag) {
+    case PJMEDIA_SDP_PC_DIRECTION_NONE:
+        pj_strcat2(&value_tmp, "none");
+        break;
+    case PJMEDIA_SDP_PC_DIRECTION_SEND:
+        pj_strcat2(&value_tmp, "send");
+        break;
+    case PJMEDIA_SDP_PC_DIRECTION_RECV:
+        pj_strcat2(&value_tmp, "recv");
+        break;
+    case PJMEDIA_SDP_PC_DIRECTION_SENDRECV:
+        pj_strcat2(&value_tmp, "sendrecv");
+        break;
+    default:
+        break;
+    }
+
+    attr->value.ptr = (char*) pj_pool_alloc(pool, value_tmp.slen+1); /* + NULL */
+    attr->value.slen = pj_ansi_snprintf(attr->value.ptr, value_tmp.slen+1, "%.*s", 
+                        (int)value_tmp.slen, value_tmp.ptr);
+    PJ_LOG(4, (THIS_FILE, "attr val: %.*s", (int)attr->value.slen, attr->value.ptr));
+
+    return attr;
+}
+
+PJ_DECL(pj_status_t) pjmedia_sdp_precondition_resolved(const pjmedia_sdp_media *media)
+{
+    pjmedia_sdp_precondition_attr des_local, des_remote, curr_local, curr_remote, tmp_pc;
+    pj_bool_t pc_found=PJ_FALSE, local=PJ_FALSE, remote=PJ_FALSE;
+    int i;
+    pj_status_t status;
+    
+    for (i = 0; i < media->attr_count; i++) {
+        if ((pj_strcmp2(&media->attr[i]->name, "des") == 0) ||
+            pj_strcmp2(&media->attr[i]->name, "curr") == 0) {
+            status = pjmedia_sdp_attr_get_precondition(
+                (const pjmedia_sdp_attr *)media->attr[i], &tmp_pc);
+            if (status == PJ_SUCCESS) {
+                if ((tmp_pc.pc_status == PJMEDIA_SDP_PC_STATUS_DESIRED) &&
+                    (tmp_pc.pc_status_type == PJMEDIA_SDP_PC_S_TYPE_LOCAL))
+                    des_local = tmp_pc;
+                if ((tmp_pc.pc_status == PJMEDIA_SDP_PC_STATUS_DESIRED) &&
+                    (tmp_pc.pc_status_type == PJMEDIA_SDP_PC_S_TYPE_REMOTE))
+                    des_remote = tmp_pc;
+                if ((tmp_pc.pc_status == PJMEDIA_SDP_PC_STATUS_CURRENT) &&
+                    (tmp_pc.pc_status_type == PJMEDIA_SDP_PC_S_TYPE_LOCAL))
+                    curr_local = tmp_pc;
+                if ((tmp_pc.pc_status == PJMEDIA_SDP_PC_STATUS_CURRENT) &&
+                    (tmp_pc.pc_status_type == PJMEDIA_SDP_PC_S_TYPE_REMOTE))
+                    curr_remote = tmp_pc;
+                pc_found=PJ_TRUE;
+            }
+        }
+    }
+    if (pc_found == PJ_FALSE) {
+        return PJ_SUCCESS;
+    }
+    if (curr_local.pc_direction_tag == PJMEDIA_SDP_PC_DIRECTION_SENDRECV)
+       local=PJ_TRUE;
+    if (curr_remote.pc_direction_tag == PJMEDIA_SDP_PC_DIRECTION_SENDRECV)
+       remote=PJ_TRUE;
+    if (curr_local.pc_direction_tag == des_local.pc_direction_tag)
+       local=PJ_TRUE;
+    if (curr_remote.pc_direction_tag == des_remote.pc_direction_tag)
+       remote=PJ_TRUE;
+    if ((remote == PJ_FALSE)&&(local == PJ_FALSE)) {
+        PJ_LOG(3, (THIS_FILE, "Unresolved all preconditions remote curr: %d, des: %d, local curr: %d, des: %d", 
+        (int)curr_remote.pc_direction_tag, (int)des_remote.pc_direction_tag,
+        (int)curr_local.pc_direction_tag, (int)des_local.pc_direction_tag));
+        return PJMEDIA_SDP_PCERR_BOTH;
+    }
+    if (remote == PJ_FALSE) {
+        PJ_LOG(3, (THIS_FILE, "Unresolved remote preconditions current: %d, desired: %d", 
+        (int)curr_remote.pc_direction_tag, (int)des_remote.pc_direction_tag));
+        return PJMEDIA_SDP_PCERR_REMOTE;
+    }
+    if (local == PJ_FALSE) {
+        PJ_LOG(3, (THIS_FILE, "Unresolved local preconditions current: %d, desired: %d", 
+        (int)curr_local.pc_direction_tag, (int)des_local.pc_direction_tag));
+        return PJMEDIA_SDP_PCERR_LOCAL;
+    }
+    return PJ_SUCCESS;
+}
 
 PJ_DEF(pj_status_t) pjmedia_sdp_attr_to_rtpmap(pj_pool_t *pool,
                                                const pjmedia_sdp_attr *attr,

@@ -819,6 +819,135 @@ PJ_DECL(pj_status_t) pjmedia_sdp_session_cmp(const pjmedia_sdp_session *sd1,
 PJ_DECL(pj_status_t) pjmedia_sdp_session_add_attr(pjmedia_sdp_session *s,
                                                   pjmedia_sdp_attr *attr);
 
+/**
+ * This enumerations are used for SDP precondition RFC 3312.
+ */
+enum pjmedia_sdp_pc_status
+{
+    PJMEDIA_SDP_PC_STATUS_ERR = 0, /* error */
+    PJMEDIA_SDP_PC_STATUS_CURRENT = 1, /* a=curr */
+    PJMEDIA_SDP_PC_STATUS_DESIRED = 2, /* a=des */
+    PJMEDIA_SDP_PC_STATUS_CONFIRMED = 3 /* a=conf */
+};
+
+/**
+ * @see pjmedia_sdp_pc_status
+ */
+typedef enum pjmedia_sdp_pc_status pjmedia_sdp_pc_status;
+
+enum pjmedia_sdp_pc_type
+{
+    PJMEDIA_SDP_PC_TYPE_ERR = 0, /* error */
+    PJMEDIA_SDP_PC_TYPE_QOS = 1, /* qos */
+    PJMEDIA_SDP_PC_TYPE_1 = 2, /*  */
+    PJMEDIA_SDP_PC_TYPE_2 = 3 /*  */
+};
+
+/**
+ * @see pjmedia_sdp_pc_type
+ */
+typedef enum pjmedia_sdp_pc_type pjmedia_sdp_pc_type;
+
+enum pjmedia_sdp_pc_strength_tag
+{
+    PJMEDIA_SDP_PC_STRENGTH_ERR = 0, /* error */
+    PJMEDIA_SDP_PC_STRENGTH_MANDATORY = 1, /* mandatory */
+    PJMEDIA_SDP_PC_STRENGTH_OPTIONAL = 2, /* optional */
+    PJMEDIA_SDP_PC_STRENGTH_NONE = 3, /* none */
+    PJMEDIA_SDP_PC_STRENGTH_FAILURE = 4, /* failure */
+    PJMEDIA_SDP_PC_STRENGTH_UNKNOWN = 5 /* unknown */
+};
+
+/**
+ * @see pjmedia_sdp_pc_strength_tag
+ */
+typedef enum pjmedia_sdp_pc_strength_tag pjmedia_sdp_pc_strength_tag;
+
+enum pjmedia_sdp_pc_status_type
+{
+    PJMEDIA_SDP_PC_S_TYPE_ERR = 0, /* error */
+    PJMEDIA_SDP_PC_S_TYPE_E2E = 1, /* e2e */
+    PJMEDIA_SDP_PC_S_TYPE_LOCAL = 2, /* local */
+    PJMEDIA_SDP_PC_S_TYPE_REMOTE = 3 /* remote */
+};
+
+/**
+ * @see pjmedia_sdp_pc_status_type
+ */
+typedef enum pjmedia_sdp_pc_status_type pjmedia_sdp_pc_status_type;
+
+enum pjmedia_sdp_pc_direction_tag
+{
+    PJMEDIA_SDP_PC_DIRECTION_ERR = 0, /* error */
+    PJMEDIA_SDP_PC_DIRECTION_NONE = 1, /* none */
+    PJMEDIA_SDP_PC_DIRECTION_SEND = 2, /* send */
+    PJMEDIA_SDP_PC_DIRECTION_RECV = 3, /* recv */
+    PJMEDIA_SDP_PC_DIRECTION_SENDRECV = 4 /* sendrecv */
+};
+
+/**
+ * @see pjmedia_sdp_pc_direction_tag
+ */
+typedef enum pjmedia_sdp_pc_direction_tag pjmedia_sdp_pc_direction_tag;
+
+/**
+ * This structure declares SDP precondition attributes RFC 3312.
+ */
+
+struct pjmedia_sdp_precondition_attr
+{
+    pjmedia_sdp_pc_status        pc_status;        /**< precondition status. */
+    /* = ( "curr" | "des" | "conf" ) */
+    pjmedia_sdp_pc_type          pc_type;          /**< precondition type. */
+    /* = ( "qos" | token ) */
+    pjmedia_sdp_pc_strength_tag  pc_strength_tag;  /**< Strength-tag. */
+    /* = ("mandatory" | "optional" | "none" | "failure" | "unknown" ) */
+    pjmedia_sdp_pc_status_type   pc_status_type;   /**< Status-type. */
+    /* = ( "e2e" | "local" | "remote" ) */
+    pjmedia_sdp_pc_direction_tag pc_direction_tag; /**< Direction-tag. */
+    /* = ( "none" | "send" | "recv" | "sendrecv" ) */
+};
+
+/**
+ * @see pjmedia_sdp_precondition_attr
+ */
+typedef struct pjmedia_sdp_precondition_attr pjmedia_sdp_precondition_attr;
+
+
+/**
+ * Parse a generic SDP attribute to get SDP precondition attribute value.
+ *
+ * @param attr          Generic attribute to be converted to precondition, which
+ *                      name must be "precondition".
+ * @param precondition  SDP precondition attribute to be initialized.
+ *
+ * @return              PJ_SUCCESS on success.
+ */
+PJ_DEF(pj_status_t) pjmedia_sdp_attr_get_precondition(
+    const pjmedia_sdp_attr *attr, pjmedia_sdp_precondition_attr *precondition);
+
+
+/**
+ * Create generic attribute from precondition.
+ *
+ * @param pool          Pool to create the attribute.
+ * @param precondition  precondition
+ *
+ * @return              SDP attribute.
+ */
+PJ_DECL(pjmedia_sdp_attr*) pjmedia_sdp_attr_create_precondition(pj_pool_t *pool,
+                                                        const pjmedia_sdp_precondition_attr *precondition);
+
+/**
+ * Check if media preconditions are resolved.
+ *
+ * @param media     SDP Media
+ *
+ * @return          PJ_SUCCESS when both preconditions are resolved,
+ *                  or the appropriate status code describing which part of
+ *                  the preconditions that are not resolved.
+ */
+PJ_DECL(pj_status_t) pjmedia_sdp_precondition_resolved(const pjmedia_sdp_media *media);
 
 PJ_END_DECL
 

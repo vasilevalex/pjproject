@@ -316,6 +316,25 @@ PJ_BEGIN_DECL
  */
 #define PJMEDIA_SDP_ETIMENOTEQUAL   (PJMEDIA_ERRNO_START+72)    /* 220072 */
 
+/************************************************************
+ * Preconditions
+ ***********************************************************/
+/**
+ * @hideinitializer
+ * Local SDP preconditions are not resolved.
+ */
+#define PJMEDIA_SDP_PCERR_LOCAL     (PJMEDIA_ERRNO_START+73)    /* 220073 */
+/**
+ * @hideinitializer
+ * Remote SDP preconditions are not resolved.
+ */
+#define PJMEDIA_SDP_PCERR_REMOTE    (PJMEDIA_ERRNO_START+74)    /* 220074 */
+/**
+ * @hideinitializer
+ * Remote and local SDP preconditions are not resolved.
+ */
+#define PJMEDIA_SDP_PCERR_BOTH      (PJMEDIA_ERRNO_START+75)    /* 220075 */
+
 
 /************************************************************
  * CODEC

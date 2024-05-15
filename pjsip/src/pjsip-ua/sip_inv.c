@@ -1009,6 +1009,8 @@ PJ_DEF(pj_status_t) pjsip_inv_create_uac( pjsip_dialog *dlg,
         options |= PJSIP_INV_SUPPORT_TIMER;
     if (options & PJSIP_INV_REQUIRE_TRICKLE_ICE)
         options |= PJSIP_INV_SUPPORT_TRICKLE_ICE;
+    if (options & PJSIP_INV_REQUIRE_PRECONDITION)
+        options |= PJSIP_INV_SUPPORT_PRECONDITION;
 
     /* Create the session */
     inv = PJ_POOL_ZALLOC_T(dlg->pool, pjsip_inv_session);
@@ -1277,6 +1279,8 @@ PJ_DEF(pj_status_t) pjsip_inv_verify_request3(pjsip_rx_data *rdata,
         *options |= PJSIP_INV_SUPPORT_ICE;
     if (*options & PJSIP_INV_REQUIRE_TRICKLE_ICE)
         *options |= PJSIP_INV_SUPPORT_TRICKLE_ICE;
+    if (*options & PJSIP_INV_REQUIRE_PRECONDITION)
+        *options |= PJSIP_INV_SUPPORT_PRECONDITION;
 
     if (rdata) {
         /* Get the message in rdata */
@@ -1504,6 +1508,7 @@ PJ_DEF(pj_status_t) pjsip_inv_verify_request3(pjsip_rx_data *rdata,
         const pj_str_t STR_TIMER = { "timer", 5};
         const pj_str_t STR_ICE = { "ice", 3 };
         const pj_str_t STR_TRICKLE_ICE = { "trickle-ice", 11 };
+        const pj_str_t STR_PRECONDITION = { "precondition", 12 };
 
         for (i=0; i<sup_hdr->count; ++i) {
             if (pj_stricmp(&sup_hdr->values[i], &STR_100REL)==0)
@@ -1514,6 +1519,8 @@ PJ_DEF(pj_status_t) pjsip_inv_verify_request3(pjsip_rx_data *rdata,
                 rem_option |= PJSIP_INV_SUPPORT_ICE;
             else if (pj_stricmp(&sup_hdr->values[i], &STR_TRICKLE_ICE)==0)
                 rem_option |= PJSIP_INV_SUPPORT_TRICKLE_ICE;
+            else if (pj_stricmp(&sup_hdr->values[i], &STR_PRECONDITION)==0)
+                rem_option |= PJSIP_INV_SUPPORT_PRECONDITION;
         }
     }
 
@@ -1529,6 +1536,7 @@ PJ_DEF(pj_status_t) pjsip_inv_verify_request3(pjsip_rx_data *rdata,
         const pj_str_t STR_TIMER = { "timer", 5 };
         const pj_str_t STR_ICE = { "ice", 3 };
         const pj_str_t STR_TRICKLE_ICE = { "trickle-ice", 11 };
+        const pj_str_t STR_PRECONDITION = { "precondition", 12 };
         unsigned unsupp_cnt = 0;
         pj_str_t unsupp_tags[PJSIP_GENERIC_ARRAY_MAX_COUNT];
         
@@ -1542,6 +1550,11 @@ PJ_DEF(pj_status_t) pjsip_inv_verify_request3(pjsip_rx_data *rdata,
                 pj_stricmp(&req_hdr->values[i], &STR_TIMER)==0)
             {
                 rem_option |= PJSIP_INV_REQUIRE_TIMER;
+
+            } else if ((*options & PJSIP_INV_SUPPORT_PRECONDITION) &&
+                pj_stricmp(&req_hdr->values[i], &STR_PRECONDITION)==0)
+            {
+                rem_option |= PJSIP_INV_REQUIRE_PRECONDITION;
 
             } else if (pj_stricmp(&req_hdr->values[i], &STR_REPLACES)==0) {
                 pj_bool_t supp;
@@ -1603,6 +1616,16 @@ PJ_DEF(pj_status_t) pjsip_inv_verify_request3(pjsip_rx_data *rdata,
         }
     }
 
+    /* Dirty hack for Samsung phones WiFi calling
+     * They don't have anything about preconditions in SIP
+     * So even if we require precondition on endpoint
+     * it is disabled, when there are no Supported header
+     */
+    if (!(rem_option & PJSIP_INV_SUPPORT_PRECONDITION)) {
+        *options &= ~PJSIP_INV_REQUIRE_PRECONDITION;
+        *options &= ~PJSIP_INV_SUPPORT_PRECONDITION;
+    }
+
     /* Check if there are local requirements that are not supported
      * by peer.
      */
@@ -1611,7 +1634,9 @@ PJ_DEF(pj_status_t) pjsip_inv_verify_request3(pjsip_rx_data *rdata,
                  ((*options & PJSIP_INV_REQUIRE_TIMER)!=0 && 
                   (rem_option & PJSIP_INV_SUPPORT_TIMER)==0) ||
                  ((*options & PJSIP_INV_REQUIRE_TRICKLE_ICE)!=0 && 
-                  (rem_option & PJSIP_INV_SUPPORT_TRICKLE_ICE)==0)))
+                  (rem_option & PJSIP_INV_SUPPORT_TRICKLE_ICE)==0) ||
+                 ((*options & PJSIP_INV_REQUIRE_PRECONDITION)!=0 &&
+                  (rem_option & PJSIP_INV_SUPPORT_PRECONDITION)==0)))
     {
         code = PJSIP_SC_EXTENSION_REQUIRED;
         status = PJSIP_ERRNO_FROM_SIP_STATUS(code);
@@ -1629,6 +1654,8 @@ PJ_DEF(pj_status_t) pjsip_inv_verify_request3(pjsip_rx_data *rdata,
                 req_hdr->values[req_hdr->count++] = pj_str("timer");
             if (*options & PJSIP_INV_REQUIRE_TRICKLE_ICE)
                 req_hdr->values[req_hdr->count++] = pj_str("trickle-ice");
+            if (*options & PJSIP_INV_REQUIRE_PRECONDITION)
+                req_hdr->values[req_hdr->count++] = pj_str("precondition");
 
             pj_list_push_back(&res_hdr_list, req_hdr);
 
@@ -1661,6 +1688,10 @@ PJ_DEF(pj_status_t) pjsip_inv_verify_request3(pjsip_rx_data *rdata,
     if (rem_option & PJSIP_INV_REQUIRE_TRICKLE_ICE) {
             pj_assert(*options & PJSIP_INV_SUPPORT_TRICKLE_ICE);
             *options |= PJSIP_INV_REQUIRE_TRICKLE_ICE;
+    }
+    if (rem_option & PJSIP_INV_REQUIRE_PRECONDITION) {
+            pj_assert(*options & PJSIP_INV_SUPPORT_PRECONDITION);
+            *options |= PJSIP_INV_REQUIRE_PRECONDITION;
     }
 
 on_return:
@@ -1780,6 +1811,8 @@ PJ_DEF(pj_status_t) pjsip_inv_create_uas( pjsip_dialog *dlg,
         options |= PJSIP_INV_SUPPORT_100REL;
     if (options & PJSIP_INV_REQUIRE_TIMER)
         options |= PJSIP_INV_SUPPORT_TIMER;
+    if (options & PJSIP_INV_REQUIRE_PRECONDITION)
+        options |= PJSIP_INV_SUPPORT_PRECONDITION;
 
     /* Create the session */
     inv = PJ_POOL_ZALLOC_T(dlg->pool, pjsip_inv_session);
@@ -2066,7 +2099,8 @@ static void cleanup_allow_sup_hdr(unsigned inv_option,
     /* If all extensions are enabled, nothing to do */
     if ((inv_option & PJSIP_INV_SUPPORT_100REL) &&
         (inv_option & PJSIP_INV_SUPPORT_TIMER) &&
-        (inv_option & PJSIP_INV_SUPPORT_TRICKLE_ICE))
+        (inv_option & PJSIP_INV_SUPPORT_TRICKLE_ICE) &&
+        (inv_option & PJSIP_INV_SUPPORT_PRECONDITION))
     {
         return;
     }
@@ -2103,6 +2137,11 @@ static void cleanup_allow_sup_hdr(unsigned inv_option,
             remove_val_from_array_hdr(allow_hdr, &STR_PRACK);
         if (sup_hdr)
             remove_val_from_array_hdr(sup_hdr, &STR_100REL);
+    }
+
+    if ((inv_option & PJSIP_INV_SUPPORT_PRECONDITION) == 0 && sup_hdr) {
+        const pj_str_t STR_PRECONDITION = { "precondition", 12 };
+        remove_val_from_array_hdr(sup_hdr, &STR_PRECONDITION);
     }
 }
 
@@ -2203,7 +2242,8 @@ PJ_DEF(pj_status_t) pjsip_inv_invite( pjsip_inv_session *inv,
     /* Add Require header. */
     if ((inv->options & PJSIP_INV_REQUIRE_100REL) ||
         (inv->options & PJSIP_INV_REQUIRE_TIMER) ||
-        (inv->options & PJSIP_INV_REQUIRE_TRICKLE_ICE))
+        (inv->options & PJSIP_INV_REQUIRE_TRICKLE_ICE) ||
+        (inv->options & PJSIP_INV_REQUIRE_PRECONDITION))
     {
         pjsip_require_hdr *hreq;
 
@@ -2215,6 +2255,8 @@ PJ_DEF(pj_status_t) pjsip_inv_invite( pjsip_inv_session *inv,
             hreq->values[hreq->count++] = pj_str("timer");
         if (inv->options & PJSIP_INV_REQUIRE_TRICKLE_ICE)
             hreq->values[hreq->count++] = pj_str("trickle-ice");
+        if (inv->options & PJSIP_INV_REQUIRE_PRECONDITION)
+            hreq->values[hreq->count++] = pj_str("precondition");
 
         pjsip_msg_add_hdr(tdata->msg, (pjsip_hdr*) hreq);
     }

@@ -389,6 +389,16 @@ enum pjsip_inv_option
      */
     PJSIP_INV_REQUIRE_TRICKLE_ICE = 512,
 
+    /**
+     * Indicate support for precondition extension
+     */
+    PJSIP_INV_SUPPORT_PRECONDITION = 1024,
+
+    /**
+     * Require precondition extension
+     */
+    PJSIP_INV_REQUIRE_PRECONDITION = 2048
+
 };
 
 /* Forward declaration of Session Timers */
