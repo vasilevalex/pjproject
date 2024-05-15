@@ -154,6 +154,83 @@ static pj_status_t compare_attr(unsigned count1,
     return PJ_SUCCESS;
 }
 
+/* Compare preconditions */
+static pj_status_t compare_precondition(const pjmedia_sdp_media *sd1,
+                                        const pjmedia_sdp_media *sd2)
+{
+    pjmedia_sdp_precondition_attr des_local1, des_remote1, curr_local1, curr_remote1, tmp_pc;
+    pjmedia_sdp_precondition_attr des_local2, des_remote2, curr_local2, curr_remote2;
+    pj_bool_t pc_found=PJ_FALSE;
+    int i;
+    pj_status_t status;
+    
+    for (i = 0; i < sd1->attr_count; i++) {
+        if (pj_strcmp2(&sd1->attr[i]->name, "des") == 0) {
+            status = pjmedia_sdp_attr_get_precondition(
+                (const pjmedia_sdp_attr *)sd1->attr[i], &tmp_pc);
+            if (status == PJ_SUCCESS) {
+                if (tmp_pc.pc_status_type == PJMEDIA_SDP_PC_S_TYPE_LOCAL)
+                    des_local1 = tmp_pc;
+                if (tmp_pc.pc_status_type == PJMEDIA_SDP_PC_S_TYPE_REMOTE)
+                    des_remote1 = tmp_pc;
+                pc_found=PJ_TRUE;
+            }
+        }
+        if (pj_strcmp2(&sd1->attr[i]->name, "curr") == 0) {
+            status = pjmedia_sdp_attr_get_precondition(
+                (const pjmedia_sdp_attr *)sd1->attr[i], &tmp_pc);
+            if (status == PJ_SUCCESS) {
+                if (tmp_pc.pc_status_type == PJMEDIA_SDP_PC_S_TYPE_LOCAL)
+                    curr_local1 = tmp_pc;
+                if (tmp_pc.pc_status_type == PJMEDIA_SDP_PC_S_TYPE_REMOTE)
+                    curr_remote1 = tmp_pc;
+                pc_found=PJ_TRUE;
+            }
+        }
+    }
+    for (i = 0; i < sd2->attr_count; i++) {
+        if (pj_strcmp2(&sd2->attr[i]->name, "des") == 0) {
+            status = pjmedia_sdp_attr_get_precondition(
+                (const pjmedia_sdp_attr *)sd2->attr[i], &tmp_pc);
+            if (status == PJ_SUCCESS) {
+                if (tmp_pc.pc_status_type == PJMEDIA_SDP_PC_S_TYPE_LOCAL)
+                    des_local2 = tmp_pc;
+                if (tmp_pc.pc_status_type == PJMEDIA_SDP_PC_S_TYPE_REMOTE)
+                    des_remote2 = tmp_pc;
+                pc_found=PJ_TRUE;
+            }
+        }
+        if (pj_strcmp2(&sd2->attr[i]->name, "curr") == 0) {
+            status = pjmedia_sdp_attr_get_precondition(
+                (const pjmedia_sdp_attr *)sd2->attr[i], &tmp_pc);
+            if (status == PJ_SUCCESS) {
+                if (tmp_pc.pc_status_type == PJMEDIA_SDP_PC_S_TYPE_LOCAL)
+                    curr_local2 = tmp_pc;
+                if (tmp_pc.pc_status_type == PJMEDIA_SDP_PC_S_TYPE_REMOTE)
+                    curr_remote2 = tmp_pc;
+                pc_found=PJ_TRUE;
+            }
+        }
+    }
+    if (pc_found == PJ_FALSE) {
+        return PJ_SUCCESS;
+    }
+    if (curr_local1.pc_direction_tag != curr_local2.pc_direction_tag)
+       return PJMEDIA_SDP_PCERR_LOCAL;
+    if (curr_remote1.pc_direction_tag != curr_remote2.pc_direction_tag)
+       return PJMEDIA_SDP_PCERR_REMOTE;
+    if (des_local1.pc_direction_tag != des_local2.pc_direction_tag)
+       return PJMEDIA_SDP_PCERR_LOCAL;
+    if (des_local1.pc_strength_tag != des_local2.pc_strength_tag)
+       return PJMEDIA_SDP_PCERR_LOCAL;
+    if (des_remote1.pc_direction_tag != des_remote2.pc_direction_tag)
+       return PJMEDIA_SDP_PCERR_REMOTE;
+    if (des_remote1.pc_strength_tag != des_remote2.pc_strength_tag)
+       return PJMEDIA_SDP_PCERR_REMOTE;
+    
+    return PJ_SUCCESS;
+}
+
 /* Compare media descriptor */
 PJ_DEF(pj_status_t) pjmedia_sdp_media_cmp( const pjmedia_sdp_media *sd1,
                                            const pjmedia_sdp_media *sd2,
@@ -211,6 +288,11 @@ PJ_DEF(pj_status_t) pjmedia_sdp_media_cmp( const pjmedia_sdp_media *sd1,
     /* Compare attributes. */
     status = compare_attr(sd1->attr_count, sd1->attr, 
                           sd2->attr_count, sd2->attr);
+    if (status != PJ_SUCCESS)
+        return status;
+    
+    /* Compare preconditions. */
+    status = compare_precondition(sd1, sd2);
     if (status != PJ_SUCCESS)
         return status;
 
